@@ -1734,12 +1734,48 @@ fn mc<BD: BitDepth>(
     refidx: usize,
     filter_2d: Filter2d,
 ) -> Result<(), ()> {
+    let ss_ver = pl != 0 && f.cur.p.layout == Rav1dPixelLayout::I420;
+    let ss_hor = pl != 0 && f.cur.p.layout != Rav1dPixelLayout::I444;
+
+    return match (ss_ver, ss_hor) {
+        (true, true) => mc_tmpl::<BD, true, true>(
+            f, emu_edge, b, dst, bw4, bh4, bx, by, pl, mv, refp, refidx, filter_2d,
+        ),
+        (true, false) => mc_tmpl::<BD, true, false>(
+            f, emu_edge, b, dst, bw4, bh4, bx, by, pl, mv, refp, refidx, filter_2d,
+        ),
+        (false, true) => mc_tmpl::<BD, false, true>(
+            f, emu_edge, b, dst, bw4, bh4, bx, by, pl, mv, refp, refidx, filter_2d,
+        ),
+        (false, false) => mc_tmpl::<BD, false, false>(
+            f, emu_edge, b, dst, bw4, bh4, bx, by, pl, mv, refp, refidx, filter_2d,
+        ),
+    };
+}
+
+#[inline(always)]
+fn mc_tmpl<BD: BitDepth, const V: bool, const H: bool>(
+    f: &Rav1dFrameData,
+    emu_edge: &mut ScratchEmuEdge,
+    b: Bxy,
+    dst: MaybeTempPixels<()>,
+    bw4: c_int,
+    bh4: c_int,
+    bx: c_int,
+    by: c_int,
+    pl: usize,
+    mv: Mv,
+    refp: &Rav1dThreadPicture,
+    refidx: usize,
+    filter_2d: Filter2d,
+) -> Result<(), ()> {
     let bd = BD::from_c(f.bitdepth_max);
     let ref_data = &refp.p.data.as_ref().unwrap().data;
     let cur_data = &f.cur.data.as_ref().unwrap().data;
 
-    let ss_ver = (pl != 0 && f.cur.p.layout == Rav1dPixelLayout::I420) as c_int;
-    let ss_hor = (pl != 0 && f.cur.p.layout != Rav1dPixelLayout::I444) as c_int;
+    let ss_ver = V as c_int;
+    let ss_hor = H as c_int;
+
     let h_mul = 4 >> ss_hor;
     let v_mul = 4 >> ss_ver;
     let mvx = mv.x as c_int;
